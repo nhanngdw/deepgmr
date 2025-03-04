@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from visu_util import visualize
-
+torch.cuda.empty_cache()
 
 def gmm_params(gamma, pts):
     '''
@@ -16,17 +16,31 @@ def gmm_params(gamma, pts):
         gamma: B x N x J
         pts: B x N x 3
     '''
+    gamma = gamma.to("cuda") if gamma.device.type != "cuda" else gamma
+    pts = pts.to("cuda") if pts.device.type != "cuda" else pts
+
+    # print("Inside gmm_params()")
+    # print(f"gamma shape: {gamma.shape}, pts shape: {pts.shape}")
+    # print(gamma.dtype, pts.dtype) 
+    # print(gamma.device, pts.device)
+    # print(torch.isnan(gamma.cpu()).sum())  
+    torch.cuda.synchronize()
+    # print(torch.mean(gamma.cpu(), dim=1))
+    # print(torch.cuda.memory_allocated()) 
+    # print(torch.cuda.memory_reserved())
+
     # pi: B x J
-    pi = gamma.mean(dim=1)
+    pi = gamma.cpu().mean(dim=1).to(gamma.device)
     Npi = pi * gamma.shape[1]
     # mu: B x J x 3
     mu = gamma.transpose(1, 2) @ pts / Npi.unsqueeze(2)
     # diff: B x N x J x 3
     diff = pts.unsqueeze(2) - mu.unsqueeze(1)
+    
     # sigma: B x J x 3 x 3
     eye = torch.eye(3).unsqueeze(0).unsqueeze(1).to(gamma.device)
     sigma = (
-        ((diff.unsqueeze(3) @ diff.unsqueeze(4)).squeeze() * gamma).sum(dim=1) / Npi
+        ((diff.unsqueeze(3) @ diff.unsqueeze(4)).squeeze() * gamma).cpu().sum(dim=1).to(gamma.device) / Npi
     ).unsqueeze(2).unsqueeze(3) * eye
     return pi, mu, sigma
 
@@ -178,9 +192,11 @@ class DeepGMR(nn.Module):
         self.T_gt = T_gt
 
         eye = torch.eye(4).expand_as(self.T_gt).to(self.T_gt.device)
+
         self.mse1 = F.mse_loss(self.T_12 @ torch.inverse(T_gt), eye)
         self.mse2 = F.mse_loss(self.T_21 @ T_gt, eye)
         loss = self.mse1 + self.mse2
+        print(loss)
 
         self.r_err = rotation_error(self.T_12[:, :3, :3], T_gt[:, :3, :3])
         self.t_err = translation_error(self.T_12[:, :3, 3], T_gt[:, :3, 3])
