@@ -143,7 +143,7 @@ if __name__ == "__main__":
     # train setting
     parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--batch_size', type=int, default=32)
-    parser.add_argument('--n_epochs', type=int, default=100)
+    parser.add_argument('--n_epochs', type=int, default=30)
     parser.add_argument('--log_freq', type=int, default=30)
     parser.add_argument('--plot_freq', type=int, default=250)
     parser.add_argument('--save_freq', type=int, default=10)
@@ -156,7 +156,7 @@ if __name__ == "__main__":
     model = DeepGMR(args)
     if torch.cuda.is_available():
         model.cuda()
-
+        print("Model is on:", next(model.parameters()).device)
     data = TrainData(args.data_file, args)
     ids = np.random.permutation(len(data))
     n_val = int(args.val_fraction * len(data))
